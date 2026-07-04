@@ -6,7 +6,7 @@ CIPHER is a peer-to-peer content delivery network designed to bypass centralized
 
 Whether you're behind a restrictive NAT or simply want to share data without relying on a corporate tunnel, CIPHER ensures your data is delivered safely and authentically.
 
-## 🌟 Highlights
+##  Highlights
 
 *   **Decentralized by Design**: No central authority controls your data.
 *   **Zero-Config Networking**: Built-in Libp2p hole-punching (DCUtR) effortlessly connects peers across isolated networks and firewalls.
@@ -14,7 +14,7 @@ Whether you're behind a restrictive NAT or simply want to share data without rel
 *   **Secure Transport**: All file chunks are encrypted in transit using robust AES-256-GCM symmetric cryptography.
 *   **Multi-Protocol**: Automatically negotiates the best connection via QUIC, TCP, or Secure WebSockets.
 
-## 🚀 Usage
+##  Usage
 
 CIPHER works by spinning up a **Provider** to serve data, and a **Client** to request it. Here is a minimal example of how to securely transfer a file across two completely separate networks using a public relay:
 
@@ -40,7 +40,7 @@ The client will automatically negotiate a direct hole-punched connection if poss
 
 *(For deep diagnostic logs during transport, simply append the `--verbose` flag to either command!)*
 
-## ⬇️ Installation
+##  Installation
 
 Currently, CIPHER is built from source. Ensure you have [Go](https://golang.org/doc/install) installed on your system.
 
@@ -56,7 +56,7 @@ go build -o provider ./cmd/provider
 go build -o client ./cmd/client
 ```
 
-## 💭 Feedback & Contributing
+##  Feedback & Contributing
 
 We are building CIPHER to make a lasting impact on how data is distributed across the internet, and community feedback is everything. 
 
