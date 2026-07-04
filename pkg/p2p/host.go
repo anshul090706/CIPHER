@@ -13,6 +13,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
+	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
+	ws "github.com/libp2p/go-libp2p/p2p/transport/websocket"
+	"github.com/multiformats/go-multiaddr"
+	circuit "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/client"
 )
 
 const ProtocolID = "/cipher/v5/chunk/1.0.0"
@@ -22,6 +27,7 @@ type HostOptions struct {
 	ListenPort  int
 	PrivKeyPath string
 	EnableMDNS  bool
+	RelayAddr   string
 }
 
 // NewHost creates a new libp2p host for CIPHER.
@@ -32,15 +38,43 @@ func NewHost(ctx context.Context, opts HostOptions) (host.Host, error) {
 	}
 
 	listenAddr := fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", opts.ListenPort)
+	quicListenAddr := fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic-v1", opts.ListenPort)
 
 	libp2pOpts := []libp2p.Option{
 		libp2p.Identity(privKey),
-		libp2p.ListenAddrStrings(listenAddr),
+		libp2p.ListenAddrStrings(listenAddr, quicListenAddr),
+		libp2p.Transport(tcp.NewTCPTransport),
+		libp2p.Transport(quic.NewTransport),
+		libp2p.Transport(ws.New),
+		libp2p.EnableRelay(),
+		libp2p.EnableHolePunching(),
 	}
 
 	h, err := libp2p.New(libp2pOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create libp2p host: %w", err)
+	}
+
+	if opts.RelayAddr != "" {
+		maddr, err := multiaddr.NewMultiaddr(opts.RelayAddr)
+		if err == nil {
+			info, err := peer.AddrInfoFromP2pAddr(maddr)
+			if err == nil {
+				// Connect to the relay
+				if err := h.Connect(ctx, *info); err != nil {
+					logger.Warn().Err(err).Msg("Failed to connect to relay")
+				} else {
+					logger.Info().Msgf("Connected to relay %s", info.ID)
+					// Ask the relay to reserve a slot for us
+					_, err := circuit.Reserve(ctx, h, *info)
+					if err != nil {
+						logger.Warn().Err(err).Msg("Failed to reserve slot on relay (expected if not provider)")
+					} else {
+						logger.Info().Msg("Successfully reserved slot on relay")
+					}
+				}
+			}
+		}
 	}
 
 	if opts.EnableMDNS {

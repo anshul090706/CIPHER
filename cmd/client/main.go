@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"flag"
-	"fmt"
 	"os"
 
 	"github.com/1amKhush/CIPHER/pkg/logger"
@@ -17,7 +16,10 @@ func main() {
 	providerAddr := flag.String("provider", "", "Provider multiaddr")
 	rootHex := flag.String("root", "", "Merkle root in hex")
 	chunksCount := flag.Uint64("chunks", 4, "Number of chunks to download")
+	relayAddr := flag.String("relay", "", "Relay multiaddr to connect to (optional)")
 	flag.Parse()
+
+	logger.Init(logger.DefaultConfig())
 
 	if *providerAddr == "" || *rootHex == "" {
 		logger.Fatal().Msg("-provider and -root flags are required")
@@ -44,6 +46,7 @@ func main() {
 		ListenPort:  0,
 		PrivKeyPath: "client_key.key",
 		EnableMDNS:  true,
+		RelayAddr:   *relayAddr,
 	}
 	h, err := p2p.NewHost(context.Background(), opts)
 	if err != nil {

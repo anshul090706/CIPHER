@@ -19,14 +19,19 @@ import (
 
 func main() {
 	port := flag.Int("port", 9000, "Port to listen on")
+	relayAddr := flag.String("relay", "", "Relay multiaddr to connect to (optional)")
 	flag.Parse()
 
-	// 1. Create a dummy file for MVP
+	// 1. Create a dummy file for MVP if it doesn't exist
 	fileName := "test_file.txt"
-	dummyData := make([]byte, 100*1024) // 100 KB
-	rand.Read(dummyData)
-	os.WriteFile(fileName, dummyData, 0644)
-	logger.Info().Msgf("Created dummy file %s (100KB)", fileName)
+	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+		dummyData := make([]byte, 100*1024) // 100 KB
+		rand.Read(dummyData)
+		os.WriteFile(fileName, dummyData, 0644)
+		logger.Info().Msgf("Created dummy file %s (100KB)", fileName)
+	} else {
+		logger.Info().Msgf("Using existing file %s", fileName)
+	}
 
 	// 2. Chunk the file
 	chunks, err := chunker.ChunkFile(fileName)
@@ -59,6 +64,7 @@ func main() {
 		ListenPort:  *port,
 		PrivKeyPath: "provider_key.key",
 		EnableMDNS:  true,
+		RelayAddr:   *relayAddr,
 	}
 	h, err := p2p.NewHost(context.Background(), opts)
 	if err != nil {

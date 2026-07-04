@@ -18,17 +18,17 @@ func Keccak256(data ...[]byte) [32]byte {
 }
 
 // HResp computes the v5 response commitment: keccak256(K ∥ C_plaintext)
-func HResp(key [32]byte, ciphertext []byte) [32]byte {
+func HResp(key [32]byte, plaintext []byte) [32]byte {
 	hash := sha3.NewLegacyKeccak256()
 	hash.Write(key[:])
-	hash.Write(ciphertext)
+	hash.Write(plaintext)
 	var out [32]byte
 	hash.Sum(out[:0])
 	return out
 }
 
 // MerkleLeaf computes: keccak256(FileID ∥ ChunkIndex ∥ Length ∥ C_plaintext)
-func MerkleLeaf(fileID [32]byte, index uint64, length uint32, ciphertext []byte) [32]byte {
+func MerkleLeaf(fileID [32]byte, index uint64, length uint32, plaintext []byte) [32]byte {
 	hash := sha3.NewLegacyKeccak256()
 	
 	// FileID
@@ -45,7 +45,7 @@ func MerkleLeaf(fileID [32]byte, index uint64, length uint32, ciphertext []byte)
 	hash.Write(lenBytes[:])
 	
 	// C_plaintext
-	hash.Write(ciphertext)
+	hash.Write(plaintext)
 	
 	var out [32]byte
 	hash.Sum(out[:0])
