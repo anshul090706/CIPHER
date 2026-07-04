@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-
+	"os"
 
 	"github.com/1amKhush/CIPHER/pkg/logger"
 	"github.com/1amKhush/CIPHER/pkg/p2p"
@@ -16,7 +16,7 @@ import (
 func main() {
 	providerAddr := flag.String("provider", "", "Provider multiaddr")
 	rootHex := flag.String("root", "", "Merkle root in hex")
-	chunkIdx := flag.Uint64("chunk", 0, "Chunk index to request")
+	chunksCount := flag.Uint64("chunks", 4, "Number of chunks to download")
 	flag.Parse()
 
 	if *providerAddr == "" || *rootHex == "" {
@@ -59,13 +59,25 @@ func main() {
 	privKey := p2p.GetHostPrivateKey(h)
 
 	var fileID [32]byte // zeroed
-	plaintext, err := p2p.RequestChunk(context.Background(), h, info.ID, fileID, merkleRoot, *chunkIdx, privKey)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Chunk request failed")
-	}
-
-	logger.Info().Msgf("Successfully received and verified chunk %d! Size: %d bytes", *chunkIdx, len(plaintext))
 	
-	// Dump first few bytes to verify it's random data and not nil
-	fmt.Printf("Chunk head: %x\n", plaintext[:32])
+	outFile, err := os.Create("downloaded_file.txt")
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to create output file")
+	}
+	defer outFile.Close()
+
+	for i := uint64(0); i < *chunksCount; i++ {
+		plaintext, err := p2p.RequestChunk(context.Background(), h, info.ID, fileID, merkleRoot, i, privKey)
+		if err != nil {
+			logger.Fatal().Err(err).Msgf("Failed to request chunk %d", i)
+		}
+		
+		if _, err := outFile.Write(plaintext); err != nil {
+			logger.Fatal().Err(err).Msgf("Failed to write chunk %d to file", i)
+		}
+		
+		logger.Info().Msgf("Successfully downloaded chunk %d (%d bytes)", i, len(plaintext))
+	}
+	
+	logger.Info().Msg("File download complete!")
 }

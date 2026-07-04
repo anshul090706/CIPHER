@@ -53,14 +53,23 @@ func TestP2PLoopback(t *testing.T) {
 		t.Fatalf("client failed to connect: %v", err)
 	}
 
-	// 3. Test loopback
+	// 3. Test loopback for all chunks
 	privKey := GetHostPrivateKey(clientHost)
-	plaintext, err := RequestChunk(context.Background(), clientHost, providerHost.ID(), fileID, tree.Root, 0, privKey)
-	if err != nil {
-		t.Fatalf("RequestChunk failed: %v", err)
+	var downloadedData []byte
+	
+	for i := uint64(0); i < uint64(len(chunks)); i++ {
+		plaintext, err := RequestChunk(context.Background(), clientHost, providerHost.ID(), fileID, tree.Root, i, privKey)
+		if err != nil {
+			t.Fatalf("RequestChunk %d failed: %v", i, err)
+		}
+		
+		if len(plaintext) != len(chunks[i].Data) {
+			t.Fatalf("Length mismatch for chunk %d: got %d, expected %d", i, len(plaintext), len(chunks[i].Data))
+		}
+		downloadedData = append(downloadedData, plaintext...)
 	}
 
-	if len(plaintext) != len(chunks[0].Data) {
-		t.Fatalf("Length mismatch: got %d, expected %d", len(plaintext), len(chunks[0].Data))
+	if len(downloadedData) != len(dummyData) {
+		t.Fatalf("Final length mismatch: got %d, expected %d", len(downloadedData), len(dummyData))
 	}
 }
