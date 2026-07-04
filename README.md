@@ -11,7 +11,7 @@ Whether you're behind a restrictive NAT or simply want to share data without rel
 *   **Decentralized by Design**: No central authority controls your data.
 *   **Zero-Config Networking**: Built-in Libp2p hole-punching (DCUtR) effortlessly connects peers across isolated networks and firewalls.
 *   **Cryptographic Integrity**: Keccak256-based Merkle trees guarantee that every byte received is exactly what was requested.
-*   **Secure Transport**: All file chunks are encrypted in transit using robust AES-256-GCM symmetric cryptography.
+*   **Secure Transport**: All file chunks are encrypted in transit using robust XChaCha20-Poly1305 symmetric authenticated encryption.
 *   **Multi-Protocol**: Automatically negotiates the best connection via QUIC, TCP, or Secure WebSockets.
 
 ##  Usage

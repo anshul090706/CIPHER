@@ -11,7 +11,7 @@ func TestChunkBytes(t *testing.T) {
 	rand.Read(data)
 
 	chunks := ChunkBytes(data)
-	
+
 	// 100 KB / 32 KB = 3 chunks of 32 KB, 1 chunk of 4 KB
 	if len(chunks) != 4 {
 		t.Fatalf("expected 4 chunks, got %d", len(chunks))

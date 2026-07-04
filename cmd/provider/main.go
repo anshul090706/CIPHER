@@ -33,8 +33,12 @@ func main() {
 	fileName := "test_file.txt"
 	if _, err := os.Stat(fileName); os.IsNotExist(err) {
 		dummyData := make([]byte, 100*1024) // 100 KB
-		rand.Read(dummyData)
-		os.WriteFile(fileName, dummyData, 0644)
+		if _, err := rand.Read(dummyData); err != nil {
+			logger.Fatal().Err(err).Msg("Failed to generate dummy file contents")
+		}
+		if err := os.WriteFile(fileName, dummyData, 0644); err != nil {
+			logger.Fatal().Err(err).Msg("Failed to write dummy file")
+		}
 		logger.Info().Msgf("Created dummy file %s (100KB)", fileName)
 	} else {
 		logger.Info().Msgf("Using existing file %s", fileName)

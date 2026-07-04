@@ -36,6 +36,9 @@ func (m *ChunkRequest) Unmarshal(data []byte) error {
 	if len(data) < 74 {
 		return errors.New("ChunkRequest too short")
 	}
+	if data[0] != Version || data[1] != TypeRequest {
+		return errors.New("unexpected ChunkRequest version or type")
+	}
 	m.Version = data[0]
 	m.MsgType = data[1]
 	m.ChunkIndex = binary.BigEndian.Uint64(data[2:10])
@@ -48,7 +51,7 @@ func (m *ChunkRequest) Unmarshal(data []byte) error {
 type ChunkResponse struct {
 	Version     uint8
 	MsgType     uint8
-	Ciphertext  []byte     // Variable length
+	Ciphertext  []byte // Variable length
 	HResp       [32]byte
 	MerkleProof [][32]byte // Variable depth
 }
@@ -58,26 +61,26 @@ func (m *ChunkResponse) Marshal() []byte {
 	pLen := len(m.MerkleProof)
 	totalLen := 1 + 1 + 4 + cLen + 32 + 4 + (pLen * 32)
 	buf := make([]byte, totalLen)
-	
+
 	buf[0] = m.Version
 	buf[1] = m.MsgType
-	
+
 	binary.BigEndian.PutUint32(buf[2:6], uint32(cLen))
 	offset := 6
 	copy(buf[offset:offset+cLen], m.Ciphertext)
 	offset += cLen
-	
+
 	copy(buf[offset:offset+32], m.HResp[:])
 	offset += 32
-	
+
 	binary.BigEndian.PutUint32(buf[offset:offset+4], uint32(pLen))
 	offset += 4
-	
+
 	for _, hash := range m.MerkleProof {
 		copy(buf[offset:offset+32], hash[:])
 		offset += 32
 	}
-	
+
 	return buf
 }
 
@@ -85,36 +88,39 @@ func (m *ChunkResponse) Unmarshal(data []byte) error {
 	if len(data) < 42 { // Min length: version+type(2) + clen(4) + hresp(32) + plen(4)
 		return errors.New("ChunkResponse too short")
 	}
+	if data[0] != Version || data[1] != TypeResponse {
+		return errors.New("unexpected ChunkResponse version or type")
+	}
 	m.Version = data[0]
 	m.MsgType = data[1]
-	
+
 	cLen := int(binary.BigEndian.Uint32(data[2:6]))
 	offset := 6
-	
+
 	if len(data) < offset+cLen+36 {
 		return errors.New("ChunkResponse missing ciphertext or trailing data")
 	}
-	
+
 	m.Ciphertext = make([]byte, cLen)
 	copy(m.Ciphertext, data[offset:offset+cLen])
 	offset += cLen
-	
+
 	copy(m.HResp[:], data[offset:offset+32])
 	offset += 32
-	
-	pLen := int(binary.BigEndian.Uint32(data[offset:offset+4]))
+
+	pLen := int(binary.BigEndian.Uint32(data[offset : offset+4]))
 	offset += 4
-	
+
 	if len(data) < offset+(pLen*32) {
 		return errors.New("ChunkResponse missing merkle proof hashes")
 	}
-	
+
 	m.MerkleProof = make([][32]byte, pLen)
 	for i := 0; i < pLen; i++ {
 		copy(m.MerkleProof[i][:], data[offset:offset+32])
 		offset += 32
 	}
-	
+
 	return nil
 }
 
@@ -134,52 +140,52 @@ func (m *LotteryTicket) Marshal() []byte {
 	sigLen := len(m.Signature)
 	totalLen := 1 + 1 + 32 + 20 + 32 + 8 + 4 + 4 + sigLen // +4 for sig length prefix
 	buf := make([]byte, totalLen)
-	
+
 	buf[0] = m.Version
 	buf[1] = m.MsgType
 	offset := 2
-	
+
 	copy(buf[offset:offset+32], m.ChannelID[:])
 	offset += 32
-	
+
 	copy(buf[offset:offset+20], m.ProviderAddr[:])
 	offset += 20
-	
+
 	copy(buf[offset:offset+32], m.HResp[:])
 	offset += 32
-	
+
 	binary.BigEndian.PutUint64(buf[offset:offset+8], m.TargetBlock)
 	offset += 8
-	
+
 	binary.BigEndian.PutUint32(buf[offset:offset+4], m.WinProb)
 	offset += 4
-	
+
 	binary.BigEndian.PutUint32(buf[offset:offset+4], uint32(sigLen))
 	offset += 4
-	
+
 	copy(buf[offset:offset+sigLen], m.Signature)
-	
+
 	return buf
 }
 
 // DataToSign returns the portion of the ticket that is signed
 func (m *LotteryTicket) DataToSign() []byte {
-	// Sign everything before the signature prefix (98 bytes total)
+	// Sign everything before the signature prefix (96 bytes total)
 	buf := make([]byte, 32+20+32+8+4)
 	offset := 0
-	
+
 	copy(buf[offset:offset+32], m.ChannelID[:])
 	offset += 32
-	
+
 	copy(buf[offset:offset+20], m.ProviderAddr[:])
 	offset += 20
-	
+
 	copy(buf[offset:offset+32], m.HResp[:])
 	offset += 32
-	
+
 	binary.BigEndian.PutUint64(buf[offset:offset+8], m.TargetBlock)
 	offset += 8
-	
+
 	binary.BigEndian.PutUint32(buf[offset:offset+4], m.WinProb)
 	return buf
 }
@@ -191,32 +197,32 @@ func (m *LotteryTicket) Unmarshal(data []byte) error {
 	m.Version = data[0]
 	m.MsgType = data[1]
 	offset := 2
-	
+
 	copy(m.ChannelID[:], data[offset:offset+32])
 	offset += 32
-	
+
 	copy(m.ProviderAddr[:], data[offset:offset+20])
 	offset += 20
-	
+
 	copy(m.HResp[:], data[offset:offset+32])
 	offset += 32
-	
-	m.TargetBlock = binary.BigEndian.Uint64(data[offset:offset+8])
+
+	m.TargetBlock = binary.BigEndian.Uint64(data[offset : offset+8])
 	offset += 8
-	
-	m.WinProb = binary.BigEndian.Uint32(data[offset:offset+4])
+
+	m.WinProb = binary.BigEndian.Uint32(data[offset : offset+4])
 	offset += 4
-	
-	sigLen := int(binary.BigEndian.Uint32(data[offset:offset+4]))
+
+	sigLen := int(binary.BigEndian.Uint32(data[offset : offset+4]))
 	offset += 4
-	
+
 	if len(data) < offset+sigLen {
 		return errors.New("LotteryTicket missing signature data")
 	}
-	
+
 	m.Signature = make([]byte, sigLen)
 	copy(m.Signature, data[offset:offset+sigLen])
-	
+
 	return nil
 }
 

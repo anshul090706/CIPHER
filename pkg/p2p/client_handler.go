@@ -8,16 +8,16 @@ import (
 
 	"github.com/1amKhush/CIPHER/pkg/engine"
 	"github.com/1amKhush/CIPHER/pkg/wire"
+	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 )
 
 // RequestChunk performs the full 4-message handshake for one chunk.
 func RequestChunk(ctx context.Context, h host.Host, providerID peer.ID,
 	fileID [32]byte, merkleRoot [32]byte, chunkIndex uint64,
 	signingKey p2pcrypto.PrivKey) ([]byte, error) {
-	
+
 	s, err := h.NewStream(ctx, providerID, ProtocolID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open stream: %w", err)
@@ -26,7 +26,10 @@ func RequestChunk(ctx context.Context, h host.Host, providerID peer.ID,
 
 	// 1. Send ChunkRequest
 	var nonce [32]byte
-	io.ReadFull(rand.Reader, nonce[:])
+	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
+		s.Reset()
+		return nil, fmt.Errorf("failed to read request nonce: %w", err)
+	}
 
 	req := wire.ChunkRequest{
 		Version:    wire.Version,
@@ -64,13 +67,13 @@ func RequestChunk(ctx context.Context, h host.Host, providerID peer.ID,
 	ticket := wire.LotteryTicket{
 		Version:     wire.Version,
 		MsgType:     wire.TypeTicket,
-		TargetBlock: 0, // Stub for MVP
+		TargetBlock: 0,   // Stub for MVP
 		WinProb:     100, // Stub for MVP
 	}
-	
+
 	copy(ticket.ChannelID[:], nonce[:]) // Use nonce as mock channel ID for MVP
 	copy(ticket.HResp[:], resp.HResp[:])
-	
+
 	sig, err := signingKey.Sign(ticket.DataToSign())
 	if err != nil {
 		s.Reset()

@@ -78,6 +78,7 @@ func TestP2PLoopback(t *testing.T) {
 }
 
 func TestP2PRelay(t *testing.T) {
+	t.Skip("requires external public relay; run manually as an integration test")
 	relayAddr := "/dns4/relay-torrentium-3zok.onrender.com/tcp/443/wss/p2p/12D3KooWEBxhvkASAJtmdeKWiWWhdXCzwXEVvSMpjuY8YrDAi68Z"
 
 	// 1. Setup provider

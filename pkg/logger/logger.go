@@ -1,4 +1,4 @@
-// Package logger provides structured logging for Torrentium using zerolog.
+// Package logger provides structured logging for CIPHER using zerolog.
 // It supports multiple output formats, log levels, and context-aware logging.
 package logger
 

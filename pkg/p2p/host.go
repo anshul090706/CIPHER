@@ -13,11 +13,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
-	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	circuit "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/client"
 	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
+	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	ws "github.com/libp2p/go-libp2p/p2p/transport/websocket"
 	"github.com/multiformats/go-multiaddr"
-	circuit "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/client"
 )
 
 const ProtocolID = "/cipher/v5/chunk/1.0.0"
@@ -57,9 +57,13 @@ func NewHost(ctx context.Context, opts HostOptions) (host.Host, error) {
 
 	if opts.RelayAddr != "" {
 		maddr, err := multiaddr.NewMultiaddr(opts.RelayAddr)
-		if err == nil {
+		if err != nil {
+			logger.Warn().Err(err).Str("relay_addr", opts.RelayAddr).Msg("Invalid relay multiaddr")
+		} else {
 			info, err := peer.AddrInfoFromP2pAddr(maddr)
-			if err == nil {
+			if err != nil {
+				logger.Warn().Err(err).Str("relay_addr", opts.RelayAddr).Msg("Failed to parse relay peer info")
+			} else {
 				// Connect to the relay
 				if err := h.Connect(ctx, *info); err != nil {
 					logger.Warn().Err(err).Msg("Failed to connect to relay")
@@ -93,7 +97,7 @@ func NewHost(ctx context.Context, opts HostOptions) (host.Host, error) {
 func loadOrGeneratePrivateKey(path string) (crypto.PrivKey, error) {
 	if path == "" {
 		// Generate an ephemeral key if no path provided
-		priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, 2048, rand.Reader)
+		priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, -1, rand.Reader)
 		return priv, err
 	}
 
@@ -104,7 +108,7 @@ func loadOrGeneratePrivateKey(path string) (crypto.PrivKey, error) {
 		if decodeErr == nil {
 			keyData = decoded
 		}
-		
+
 		priv, err := crypto.UnmarshalPrivateKey(keyData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse existing key file: %w", err)
@@ -118,7 +122,7 @@ func loadOrGeneratePrivateKey(path string) (crypto.PrivKey, error) {
 
 	// Generate new key
 	logger.Info().Str("path", path).Msg("Generating new libp2p private key")
-	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, 2048, rand.Reader)
+	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, -1, rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate key: %w", err)
 	}
