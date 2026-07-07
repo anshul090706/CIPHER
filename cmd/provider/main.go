@@ -81,6 +81,7 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to start host")
 	}
+	fmt.Println("Provider Peer ID:", h.ID())
 	defer h.Close()
 
 	// 5. Register Handler
