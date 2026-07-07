@@ -10,6 +10,7 @@ import (
 	"github.com/1amKhush/CIPHER/pkg/wire"
 	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -18,7 +19,13 @@ func RequestChunk(ctx context.Context, h host.Host, providerID peer.ID,
 	fileID [32]byte, merkleRoot [32]byte, chunkIndex uint64,
 	signingKey p2pcrypto.PrivKey) ([]byte, error) {
 
-	s, err := h.NewStream(ctx, providerID, ProtocolID)
+	streamCtx := network.WithAllowLimitedConn(ctx, "cipher-chunk")
+
+	s, err := h.NewStream(
+		streamCtx,
+		providerID,
+		ProtocolID,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open stream: %w", err)
 	}

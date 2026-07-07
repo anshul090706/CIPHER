@@ -50,7 +50,7 @@ func main() {
 	opts := p2p.HostOptions{
 		ListenPort:  0,
 		PrivKeyPath: "client_key.key",
-		EnableMDNS:  true,
+		EnableMDNS:  false,
 		RelayAddr:   *relayAddr,
 	}
 	h, err := p2p.NewHost(context.Background(), opts)
