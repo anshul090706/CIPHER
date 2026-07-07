@@ -2,73 +2,117 @@
 
 > **CDNs are owned by a handful of companies. CIPHER is the alternative — a decentralized content delivery protocol where math replaces the middleman.**
 
-CIPHER is a peer-to-peer content delivery network that enables secure and verifiable file transfer between peers. It combines libp2p networking, encrypted chunk delivery, signed lottery tickets, and Merkle-based integrity verification.
+CIPHER is a peer-to-peer content delivery network designed to bypass centralized intermediaries. It allows users to securely share, verify, and stream files directly between one another using advanced cryptographic integrity checks and automated network hole-punching.
 
-Whether peers are behind different NATs or isolated networks, CIPHER uses Circuit Relay v2 to establish connectivity and securely deliver verifiable content.
+Whether you're behind a restrictive NAT or simply want to share data without relying on a corporate tunnel, CIPHER ensures your data is delivered safely and authentically.
 
 ## Highlights
 
-* **Decentralized by Design** — Content is transferred directly between peers without relying on a centralized CDN.
-* **Cross-Network Connectivity** — libp2p Circuit Relay v2 enables communication across isolated networks and NATs.
-* **Cryptographic Integrity** — Keccak256-based Merkle proofs verify every received chunk.
-* **Secure Transport** — Chunks are encrypted using XChaCha20-Poly1305 authenticated encryption.
-* **Multi-Protocol Networking** — Built on libp2p with TCP, QUIC, and Secure WebSocket support.
+* **Decentralized by Design**: No central authority controls your data.
+* **Zero-Config Networking**: Built-in Libp2p hole-punching (DCUtR) connects peers across isolated networks and firewalls when direct connectivity is possible, with Circuit Relay v2 as the relay path.
+* **Cryptographic Integrity**: Keccak256-based Merkle trees guarantee that every byte received is exactly what was requested.
+* **Secure Transport**: All file chunks are encrypted in transit using XChaCha20-Poly1305 symmetric authenticated encryption.
+* **Multi-Protocol**: Supports connection establishment through QUIC, TCP, and Secure WebSockets.
 
----
+## Usage
 
-## How CIPHER Works
+CIPHER works by spinning up a **Provider** to serve data and a **Client** to request it. A public Circuit Relay v2 service allows the peers to communicate across separate networks.
 
-```text
-Provider (Network A)
-        │
-        │ Reserve Relay Slot
-        ▼
-Public Circuit Relay v2
-        ▲
-        │ /p2p-circuit/
-        │
-Client (Network B)
+### 1. Start the Provider
+
+The provider initializes the data, generates a cryptographic Merkle tree for integrity, connects to the public relay, and reserves a relay slot.
+
+```bash
+go run ./cmd/provider -relay /dns4/cipher-al5a.onrender.com/tcp/443/wss/p2p/12D3KooWHc1PMoMsmwnFw1yNDxSgQFhUQidAymtyi9UZC6yQ9zmV --verbose
 ```
 
-For every requested chunk:
+A successful startup should show:
 
 ```text
-ChunkRequest
-      ↓
-ChunkResponse
-      ↓
-LotteryTicket
-      ↓
-KeyReveal
-      ↓
-Decrypt Chunk
-      ↓
-Verify HResp
-      ↓
-Verify Merkle Proof
-      ↓
-Write Verified Data
+Connected to relay
+Successfully reserved slot on relay
+Provider Peer ID: <PROVIDER_PEER_ID>
 ```
 
----
-
-# Usage
-
-CIPHER uses three components:
-
-* **Relay** — provides public cross-network reachability.
-* **Provider** — serves encrypted and verifiable file chunks.
-* **Client** — downloads, decrypts, and verifies the chunks.
-
-## 1. Deploy the Relay
-
-The relay executable is located at:
+Also note the values printed during startup:
 
 ```text
-cmd/relay/main.go
+Root: <MERKLE_ROOT_HASH>
+Chunks: <CHUNK_COUNT>
 ```
 
-For a Render Web Service, configure:
+Keep the provider running while the client downloads the file.
+
+### 2. Start the Client
+
+From a different network, run the client using the provider's relay circuit address.
+
+Append:
+
+```text
+/p2p-circuit/p2p/<PROVIDER_PEER_ID>
+```
+
+to the relay address and provide the Merkle root and chunk count printed by the provider.
+
+```bash
+go run ./cmd/client \
+  -provider /dns4/cipher-al5a.onrender.com/tcp/443/wss/p2p/12D3KooWHc1PMoMsmwnFw1yNDxSgQFhUQidAymtyi9UZC6yQ9zmV/p2p-circuit/p2p/<PROVIDER_PEER_ID> \
+  -root <MERKLE_ROOT_HASH> \
+  -chunks <CHUNK_COUNT> \
+  --verbose
+```
+
+For the default test file and current provider identity, an example command is:
+
+```bash
+go run ./cmd/client -provider /dns4/cipher-al5a.onrender.com/tcp/443/wss/p2p/12D3KooWHc1PMoMsmwnFw1yNDxSgQFhUQidAymtyi9UZC6yQ9zmV/p2p-circuit/p2p/12D3KooWBhRgH4ggEm1iTuTznm9zQ1Jt2AEehyUyAAkvBWmbv4ER -root dd8f60d3e7a7b99c19e4561814e7d22c597814de25677b18d4bbc38aaa1aa940 -chunks 4 --verbose
+```
+
+> **Note:** The example client command is valid for the shown provider identity and test file. If the provider identity, source file, Merkle root, or chunk count changes, use the latest values printed by the provider.
+
+The client connects through the relay circuit, requests encrypted chunks, receives the key reveal after the protocol exchange, verifies the cryptographic proofs, and reassembles the file locally.
+
+The final output is:
+
+```text
+downloaded_file.txt
+```
+
+For deep diagnostic logs during transport, append the `--verbose` flag to either command.
+
+## Installation
+
+Currently, CIPHER is built from source. Ensure you have [Go](https://golang.org/doc/install) installed on your system.
+
+Clone the repository and build the binaries:
+
+```bash
+# Clone the repository
+git clone https://github.com/anshul090706/CIPHER.git
+cd CIPHER
+
+# Download dependencies
+go mod download
+
+# Build the client and provider executables
+go build -o provider ./cmd/provider
+go build -o client ./cmd/client
+```
+
+The client machine should clone the complete repository because the client executable depends on the internal CIPHER packages.
+
+The client does not need the provider's original `test_file.txt`. After a successful transfer, the received and verified content is written to `downloaded_file.txt`.
+
+## Relay Deployment
+
+CIPHER now includes a deployable Circuit Relay v2 service under:
+
+```text
+cmd/relay
+```
+
+For a Render Web Service, use:
 
 ```text
 Language: Go
@@ -82,208 +126,76 @@ Start Command:
 ./cipher-relay
 ```
 
-After deployment, check the service logs:
+The deployed relay uses a persistent libp2p identity supplied through the `RELAY_PRIVATE_KEY` environment variable. This keeps the Relay Peer ID stable across restarts and redeployments.
+
+Current public relay:
 
 ```text
-CIPHER RELAY STARTED
-Relay Peer ID: <RELAY_PEER_ID>
-Port: 10000
-Circuit Relay v2 service: ACTIVE
+Host:
+cipher-al5a.onrender.com
+
+Peer ID:
+12D3KooWHc1PMoMsmwnFw1yNDxSgQFhUQidAymtyi9UZC6yQ9zmV
 ```
 
-Save:
+Full relay multiaddress:
 
 ```text
-RELAY_HOST
-RELAY_PEER_ID
+/dns4/cipher-al5a.onrender.com/tcp/443/wss/p2p/12D3KooWHc1PMoMsmwnFw1yNDxSgQFhUQidAymtyi9UZC6yQ9zmV
 ```
 
-The relay multiaddress is:
+## Cross-Network Fixes
+
+During end-to-end cross-network testing, the following issues were identified and fixed:
+
+* **Broken relay dependency** — replaced the unavailable public relay dependency with a deployable Circuit Relay v2 service.
+* **Relay reservation failure** — explicitly initialized the Circuit Relay v2 service so the HOP protocol is available for provider reservations.
+* **mDNS interference** — disabled automatic mDNS discovery in the provider and client for deterministic explicit relay-path communication.
+* **Relayed stream timeout** — allowed the CIPHER application stream to operate over libp2p limited relay connections.
+* **Unstable relay identity** — added persistent relay identity support through the `RELAY_PRIVATE_KEY` environment variable so the Relay Peer ID remains stable across deployments.
+
+The tested transfer flow is:
 
 ```text
-/dns4/<RELAY_HOST>/tcp/443/wss/p2p/<RELAY_PEER_ID>
-```
-
-> **Note:** The current relay identity may change after a restart or redeployment. Always use the latest Relay Peer ID from the deployment logs.
-
----
-
-## 2. Start the Provider
-
-On **Network A**:
-
-```bash
-go run ./cmd/provider \
-  -relay /dns4/<RELAY_HOST>/tcp/443/wss/p2p/<RELAY_PEER_ID> \
-  --verbose
-```
-
-Successful startup should show:
-
-```text
-Connected to relay <RELAY_PEER_ID>
-Successfully reserved slot on relay
-Provider Peer ID: <PROVIDER_PEER_ID>
-```
-
-Also note:
-
-```text
-Root: <MERKLE_ROOT>
-Chunks: <CHUNK_COUNT>
-```
-
-Keep the provider running.
-
----
-
-## 3. Start the Client
-
-On **Network B**, clone the repository if required:
-
-```bash
-git clone https://github.com/anshul090706/CIPHER.git
-cd CIPHER
-go mod download
-```
-
-Run:
-
-```bash
-go run ./cmd/client \
-  -provider /dns4/<RELAY_HOST>/tcp/443/wss/p2p/<RELAY_PEER_ID>/p2p-circuit/p2p/<PROVIDER_PEER_ID> \
-  -root <MERKLE_ROOT> \
-  -chunks <CHUNK_COUNT> \
-  --verbose
-```
-
-The client will:
-
-```text
-Connect through Relay
-        ↓
-Request Encrypted Chunks
-        ↓
-Receive Key Reveal
-        ↓
-Decrypt Chunks
-        ↓
+Provider
+    ↓
+Connect to Relay
+    ↓
+Reserve Relay Slot
+    ↓
+Client connects through /p2p-circuit/
+    ↓
+ChunkRequest
+    ↓
+ChunkResponse
+    ↓
+LotteryTicket
+    ↓
+KeyReveal
+    ↓
+Decrypt Chunk
+    ↓
 Verify HResp
-        ↓
-Verify Merkle Proofs
-        ↓
-Create downloaded_file.txt
+    ↓
+Verify Merkle Proof
+    ↓
+downloaded_file.txt
 ```
-
-The client does **not** need the provider's original file.
-
----
 
 ## Verify the Transfer
 
-On Windows PowerShell:
+On Windows PowerShell, compare the source and downloaded file hashes.
 
-**Provider**
+Provider:
 
 ```powershell
 Get-FileHash test_file.txt -Algorithm SHA256
 ```
 
-**Client**
+Client:
 
 ```powershell
 Get-FileHash downloaded_file.txt -Algorithm SHA256
 ```
 
 Both hashes should match.
-
----
-
-# Bugs Fixed
-
-During cross-network integration testing, the following networking issues were identified and resolved.
-
-### 1. Broken Public Relay
-
-The previously documented relay failed during the Secure WebSocket handshake:
-
-```text
-websocket: bad handshake
-```
-
-A dedicated deployable Circuit Relay v2 service was added under:
-
-```text
-cmd/relay
-```
-
-### 2. Relay Reservation Failure
-
-The provider connected to the relay but failed to reserve a slot because the HOP protocol was unavailable:
-
-```text
-protocols not supported:
-[/libp2p/circuit/relay/0.2.0/hop]
-```
-
-The Circuit Relay v2 service is now explicitly initialized on the relay host.
-
-### 3. mDNS Interference
-
-When provider and client were on the same LAN, mDNS could establish an unintended direct connection instead of using the explicit relay circuit.
-
-mDNS was disabled in provider and client configuration for deterministic relay-based connectivity.
-
-### 4. Stream Timeout over Relay
-
-The client connected to the provider through the relay, but opening the CIPHER application stream failed with:
-
-```text
-context deadline exceeded
-```
-
-The client stream context now explicitly allows the CIPHER chunk protocol to use libp2p limited relay connections.
-
-After these fixes, the tested flow is:
-
-```text
-Provider
-   ↓
-Connect to Relay
-   ↓
-Reserve Relay Slot
-   ↓
-Client Connects via /p2p-circuit/
-   ↓
-CIPHER Stream Opens
-   ↓
-Encrypted Chunk Transfer
-   ↓
-HResp Verification
-   ↓
-Merkle Proof Verification
-   ↓
-downloaded_file.txt
-```
-
----
-
-## Diagnostic Logging
-
-Use `--verbose` for detailed transport logs.
-
-**Provider**
-
-```bash
-go run ./cmd/provider -relay <RELAY_ADDRESS> --verbose
-```
-
-**Client**
-
-```bash
-go run ./cmd/client \
-  -provider <PROVIDER_CIRCUIT_ADDRESS> \
-  -root <MERKLE_ROOT> \
-  -chunks <CHUNK_COUNT> \
-  --verbose
-```
