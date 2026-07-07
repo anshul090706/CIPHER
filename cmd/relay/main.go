@@ -8,13 +8,12 @@ import (
 	"syscall"
 
 	"github.com/libp2p/go-libp2p"
-
+	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	ws "github.com/libp2p/go-libp2p/p2p/transport/websocket"
 )
 
 func main() {
 	port := os.Getenv("PORT")
-
 	if port == "" {
 		port = "10000"
 	}
@@ -24,17 +23,23 @@ func main() {
 			fmt.Sprintf("/ip4/0.0.0.0/tcp/%s/ws", port),
 		),
 		libp2p.Transport(ws.New),
-		libp2p.EnableRelayService(),
 	)
 
 	if err != nil {
 		panic(err)
 	}
 
+	relayService, err := relay.New(h)
+	if err != nil {
+		panic(err)
+	}
+	defer relayService.Close()
+
 	fmt.Println("========================================")
 	fmt.Println("CIPHER RELAY STARTED")
 	fmt.Println("Relay Peer ID:", h.ID())
 	fmt.Println("Port:", port)
+	fmt.Println("Circuit Relay v2 service: ACTIVE")
 	fmt.Println("========================================")
 
 	ctx, stop := signal.NotifyContext(
@@ -42,7 +47,6 @@ func main() {
 		os.Interrupt,
 		syscall.SIGTERM,
 	)
-
 	defer stop()
 
 	<-ctx.Done()
