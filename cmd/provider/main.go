@@ -21,6 +21,7 @@ func main() {
 	port := flag.Int("port", 9000, "Port to listen on")
 	relayAddr := flag.String("relay", "", "Relay multiaddr to connect to (optional)")
 	verbose := flag.Bool("verbose", false, "Enable verbose debug logging")
+	enableQUIC := flag.Bool("quic", false, "Enable QUIC transport")
 	flag.Parse()
 
 	cfg := logger.DefaultConfig()
@@ -76,12 +77,20 @@ func main() {
 		PrivKeyPath: "provider_key.key",
 		EnableMDNS:  true,
 		RelayAddr:   *relayAddr,
+		EnableQUIC:  *enableQUIC,
 	}
-	h, err := p2p.NewHost(context.Background(), opts)
+	startupCtx, cancelStartup := context.WithTimeout(context.Background(), p2p.OperationTimeout)
+	defer cancelStartup()
+	h, err := p2p.NewHost(startupCtx, opts)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to start host")
 	}
 	defer h.Close()
+
+	logger.Info().Msgf("Provider Peer ID: %s", h.ID())
+	for _, addr := range h.Addrs() {
+		logger.Info().Msgf("Provider Address: %s/p2p/%s", addr, h.ID())
+	}
 
 	// 5. Register Handler
 	h.SetStreamHandler(p2p.ProtocolID, p2p.ProviderStreamHandler(store))

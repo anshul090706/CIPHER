@@ -1,6 +1,8 @@
 package p2p
 
 import (
+	"time"
+
 	"github.com/1amKhush/CIPHER/pkg/engine"
 	"github.com/1amKhush/CIPHER/pkg/logger"
 	"github.com/1amKhush/CIPHER/pkg/wire"
@@ -11,6 +13,13 @@ import (
 func ProviderStreamHandler(store *engine.ChunkStore) network.StreamHandler {
 	return func(s network.Stream) {
 		defer s.Close()
+		if err := s.SetDeadline(time.Now().Add(OperationTimeout)); err != nil {
+			logger.Error().Err(err).Msg("Failed to set provider stream deadline")
+			s.Reset()
+			return
+		}
+		defer s.SetDeadline(time.Time{})
+
 		remotePeer := s.Conn().RemotePeer()
 		pubKey := s.Conn().RemotePublicKey()
 

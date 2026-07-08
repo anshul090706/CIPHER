@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/1amKhush/CIPHER/pkg/logger"
 	"github.com/libp2p/go-libp2p"
@@ -21,6 +22,7 @@ import (
 )
 
 const ProtocolID = "/cipher/v5/chunk/1.0.0"
+const OperationTimeout = 30 * time.Second
 
 // HostOptions configures the libp2p host.
 type HostOptions struct {
@@ -28,6 +30,7 @@ type HostOptions struct {
 	PrivKeyPath string
 	EnableMDNS  bool
 	RelayAddr   string
+	EnableQUIC  bool
 }
 
 // NewHost creates a new libp2p host for CIPHER.
@@ -38,16 +41,21 @@ func NewHost(ctx context.Context, opts HostOptions) (host.Host, error) {
 	}
 
 	listenAddr := fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", opts.ListenPort)
-	quicListenAddr := fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic-v1", opts.ListenPort)
+	listenAddrs := []string{listenAddr}
+	if opts.EnableQUIC {
+		listenAddrs = append(listenAddrs, fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic-v1", opts.ListenPort))
+	}
 
 	libp2pOpts := []libp2p.Option{
 		libp2p.Identity(privKey),
-		libp2p.ListenAddrStrings(listenAddr, quicListenAddr),
+		libp2p.ListenAddrStrings(listenAddrs...),
 		libp2p.Transport(tcp.NewTCPTransport),
-		libp2p.Transport(quic.NewTransport),
 		libp2p.Transport(ws.New),
 		libp2p.EnableRelay(),
 		libp2p.EnableHolePunching(),
+	}
+	if opts.EnableQUIC {
+		libp2pOpts = append(libp2pOpts, libp2p.Transport(quic.NewTransport))
 	}
 
 	h, err := libp2p.New(libp2pOpts...)
@@ -157,7 +165,8 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 	logger.Debug().Str("peer", pi.ID.String()).Msg("Discovered peer via mDNS")
 	// Connect proactively in background
 	go func() {
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), OperationTimeout)
+		defer cancel()
 		if err := n.h.Connect(ctx, pi); err != nil {
 			logger.Debug().Err(err).Str("peer", pi.ID.String()).Msg("Failed to connect to discovered peer")
 		} else {

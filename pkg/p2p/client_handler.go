@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/1amKhush/CIPHER/pkg/engine"
 	"github.com/1amKhush/CIPHER/pkg/wire"
@@ -18,11 +19,24 @@ func RequestChunk(ctx context.Context, h host.Host, providerID peer.ID,
 	fileID [32]byte, merkleRoot [32]byte, chunkIndex uint64,
 	signingKey p2pcrypto.PrivKey) ([]byte, error) {
 
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, OperationTimeout)
+		defer cancel()
+		deadline = time.Now().Add(OperationTimeout)
+	}
+
 	s, err := h.NewStream(ctx, providerID, ProtocolID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open stream: %w", err)
 	}
 	defer s.Close()
+	if err := s.SetDeadline(deadline); err != nil {
+		s.Reset()
+		return nil, fmt.Errorf("failed to set stream deadline: %w", err)
+	}
+	defer s.SetDeadline(time.Time{})
 
 	// 1. Send ChunkRequest
 	var nonce [32]byte
