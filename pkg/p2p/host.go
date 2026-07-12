@@ -60,6 +60,10 @@ func NewHost(ctx context.Context, opts HostOptions) (host.Host, error) {
 		libp2p.EnableHolePunching(),
 	}
 	if opts.PublicHost != "" {
+		if !opts.EnableWebSocket {
+ 			return nil, fmt.Errorf("public-host requires WebSocket listening; set EnableWebSocket=true")
+ 		}
+
 		publicAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/dns4/%s/tcp/443/wss", opts.PublicHost))
 		if err != nil {
 			return nil, fmt.Errorf("invalid public host %q: %w", opts.PublicHost, err)

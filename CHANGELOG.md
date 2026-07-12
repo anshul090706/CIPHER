@@ -18,5 +18,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - P2P tests now use bounded contexts so failed networking operations do not hang indefinitely.
 
 ### Fixed
-- Fixed local P2P verification by making provider connection details visible in provider logs.PRovider full details were not visible in terminal, so added that.
+- Fixed local P2P verification by making provider connection details visible in provider logs.
 - Fixed the default P2P test path by avoiding the unstable QUIC dependency path unless `-quic` is requested.
