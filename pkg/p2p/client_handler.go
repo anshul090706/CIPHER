@@ -24,7 +24,7 @@ func RequestChunk(ctx context.Context, h host.Host, providerID peer.ID,
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, OperationTimeout)
 		defer cancel()
-		deadline = time.Now().Add(OperationTimeout)
+		deadline, _ = ctx.Deadline()
 	}
 
 	s, err := h.NewStream(ctx, providerID, ProtocolID)
