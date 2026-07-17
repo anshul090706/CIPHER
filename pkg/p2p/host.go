@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/1amKhush/CIPHER/pkg/logger"
 	"github.com/libp2p/go-libp2p"
@@ -21,13 +22,17 @@ import (
 )
 
 const ProtocolID = "/cipher/v5/chunk/1.0.0"
+const OperationTimeout = 30 * time.Second
 
 // HostOptions configures the libp2p host.
 type HostOptions struct {
-	ListenPort  int
-	PrivKeyPath string
-	EnableMDNS  bool
-	RelayAddr   string
+	ListenPort      int
+	PrivKeyPath     string
+	EnableMDNS      bool
+	RelayAddr       string
+	EnableQUIC      bool
+	EnableWebSocket bool
+	PublicHost      string
 }
 
 // NewHost creates a new libp2p host for CIPHER.
@@ -38,16 +43,37 @@ func NewHost(ctx context.Context, opts HostOptions) (host.Host, error) {
 	}
 
 	listenAddr := fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", opts.ListenPort)
-	quicListenAddr := fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic-v1", opts.ListenPort)
+	if opts.EnableWebSocket {
+		listenAddr = fmt.Sprintf("/ip4/0.0.0.0/tcp/%d/ws", opts.ListenPort)
+	}
+	listenAddrs := []string{listenAddr}
+	if opts.EnableQUIC {
+		listenAddrs = append(listenAddrs, fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic-v1", opts.ListenPort))
+	}
 
 	libp2pOpts := []libp2p.Option{
 		libp2p.Identity(privKey),
-		libp2p.ListenAddrStrings(listenAddr, quicListenAddr),
+		libp2p.ListenAddrStrings(listenAddrs...),
 		libp2p.Transport(tcp.NewTCPTransport),
-		libp2p.Transport(quic.NewTransport),
 		libp2p.Transport(ws.New),
 		libp2p.EnableRelay(),
 		libp2p.EnableHolePunching(),
+	}
+	if opts.PublicHost != "" {
+		if !opts.EnableWebSocket {
+ 			return nil, fmt.Errorf("public-host requires WebSocket listening; set EnableWebSocket=true")
+ 		}
+
+		publicAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/dns4/%s/tcp/443/wss", opts.PublicHost))
+		if err != nil {
+			return nil, fmt.Errorf("invalid public host %q: %w", opts.PublicHost, err)
+		}
+		libp2pOpts = append(libp2pOpts, libp2p.AddrsFactory(func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+			return append(addrs, publicAddr)
+		}))
+	}
+	if opts.EnableQUIC {
+		libp2pOpts = append(libp2pOpts, libp2p.Transport(quic.NewTransport))
 	}
 
 	h, err := libp2p.New(libp2pOpts...)
@@ -95,6 +121,18 @@ func NewHost(ctx context.Context, opts HostOptions) (host.Host, error) {
 // loadOrGeneratePrivateKey loads an Ed25519 private key from a file,
 // or generates a new one and saves it if the file doesn't exist.
 func loadOrGeneratePrivateKey(path string) (crypto.PrivKey, error) {
+	if keyData := os.Getenv("CIPHER_LIBP2P_PRIVKEY"); keyData != "" {
+		decoded, err := base64.StdEncoding.DecodeString(keyData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode CIPHER_LIBP2P_PRIVKEY: %w", err)
+		}
+		priv, err := crypto.UnmarshalPrivateKey(decoded)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse CIPHER_LIBP2P_PRIVKEY: %w", err)
+		}
+		return priv, nil
+	}
+
 	if path == "" {
 		// Generate an ephemeral key if no path provided
 		priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, -1, rand.Reader)
@@ -157,7 +195,8 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 	logger.Debug().Str("peer", pi.ID.String()).Msg("Discovered peer via mDNS")
 	// Connect proactively in background
 	go func() {
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), OperationTimeout)
+		defer cancel()
 		if err := n.h.Connect(ctx, pi); err != nil {
 			logger.Debug().Err(err).Str("peer", pi.ID.String()).Msg("Failed to connect to discovered peer")
 		} else {

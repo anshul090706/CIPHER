@@ -18,6 +18,8 @@ func main() {
 	chunksCount := flag.Uint64("chunks", 4, "Number of chunks to download")
 	relayAddr := flag.String("relay", "", "Relay multiaddr to connect to (optional)")
 	verbose := flag.Bool("verbose", false, "Enable verbose debug logging")
+	enableQUIC := flag.Bool("quic", false, "Enable QUIC transport")
+	enableMDNS := flag.Bool("mdns", true, "Enable mDNS discovery")
 	flag.Parse()
 
 	cfg := logger.DefaultConfig()
@@ -50,16 +52,21 @@ func main() {
 	opts := p2p.HostOptions{
 		ListenPort:  0,
 		PrivKeyPath: "client_key.key",
-		EnableMDNS:  false,
+		EnableMDNS:  *enableMDNS,
 		RelayAddr:   *relayAddr,
+		EnableQUIC:  *enableQUIC,
 	}
-	h, err := p2p.NewHost(context.Background(), opts)
+	startupCtx, cancelStartup := context.WithTimeout(context.Background(), p2p.OperationTimeout)
+	defer cancelStartup()
+	h, err := p2p.NewHost(startupCtx, opts)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to start host")
 	}
 	defer h.Close()
 
-	if err := h.Connect(context.Background(), *info); err != nil {
+	connectCtx, cancelConnect := context.WithTimeout(context.Background(), p2p.OperationTimeout)
+	defer cancelConnect()
+	if err := h.Connect(connectCtx, *info); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to connect to provider")
 	}
 	logger.Info().Msgf("Connected to provider %s", info.ID)
@@ -75,7 +82,9 @@ func main() {
 	defer outFile.Close()
 
 	for i := uint64(0); i < *chunksCount; i++ {
-		plaintext, err := p2p.RequestChunk(context.Background(), h, info.ID, fileID, merkleRoot, i, privKey)
+		requestCtx, cancelRequest := context.WithTimeout(context.Background(), p2p.OperationTimeout)
+		plaintext, err := p2p.RequestChunk(requestCtx, h, info.ID, fileID, merkleRoot, i, privKey)
+		cancelRequest()
 		if err != nil {
 			logger.Fatal().Err(err).Msgf("Failed to request chunk %d", i)
 		}

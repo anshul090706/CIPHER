@@ -15,9 +15,12 @@ import (
 )
 
 func TestP2PLoopback(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), OperationTimeout)
+	defer cancel()
+
 	// 1. Setup provider
 	providerOpts := HostOptions{ListenPort: 0, PrivKeyPath: "", EnableMDNS: false}
-	providerHost, err := NewHost(context.Background(), providerOpts)
+	providerHost, err := NewHost(ctx, providerOpts)
 	if err != nil {
 		t.Fatalf("failed to create provider host: %v", err)
 	}
@@ -41,7 +44,7 @@ func TestP2PLoopback(t *testing.T) {
 
 	// 2. Setup client
 	clientOpts := HostOptions{ListenPort: 0, PrivKeyPath: "", EnableMDNS: false}
-	clientHost, err := NewHost(context.Background(), clientOpts)
+	clientHost, err := NewHost(ctx, clientOpts)
 	if err != nil {
 		t.Fatalf("failed to create client host: %v", err)
 	}
@@ -52,7 +55,7 @@ func TestP2PLoopback(t *testing.T) {
 		Addrs: providerHost.Addrs(),
 	}
 
-	if err := clientHost.Connect(context.Background(), providerInfo); err != nil {
+	if err := clientHost.Connect(ctx, providerInfo); err != nil {
 		t.Fatalf("client failed to connect: %v", err)
 	}
 
@@ -61,7 +64,7 @@ func TestP2PLoopback(t *testing.T) {
 	var downloadedData []byte
 
 	for i := uint64(0); i < uint64(len(chunks)); i++ {
-		plaintext, err := RequestChunk(context.Background(), clientHost, providerHost.ID(), fileID, tree.Root, i, privKey)
+		plaintext, err := RequestChunk(ctx, clientHost, providerHost.ID(), fileID, tree.Root, i, privKey)
 		if err != nil {
 			t.Fatalf("RequestChunk %d failed: %v", i, err)
 		}
@@ -79,11 +82,14 @@ func TestP2PLoopback(t *testing.T) {
 
 func TestP2PRelay(t *testing.T) {
 	t.Skip("requires external public relay; run manually as an integration test")
+	ctx, cancel := context.WithTimeout(context.Background(), OperationTimeout)
+	defer cancel()
+
 	relayAddr := "/dns4/relay-torrentium-3zok.onrender.com/tcp/443/wss/p2p/12D3KooWEBxhvkASAJtmdeKWiWWhdXCzwXEVvSMpjuY8YrDAi68Z"
 
 	// 1. Setup provider
 	providerOpts := HostOptions{ListenPort: 0, PrivKeyPath: "", EnableMDNS: false, RelayAddr: relayAddr}
-	providerHost, err := NewHost(context.Background(), providerOpts)
+	providerHost, err := NewHost(ctx, providerOpts)
 	if err != nil {
 		t.Fatalf("failed to create provider host: %v", err)
 	}
@@ -111,7 +117,7 @@ func TestP2PRelay(t *testing.T) {
 
 	// 2. Setup client
 	clientOpts := HostOptions{ListenPort: 0, PrivKeyPath: "", EnableMDNS: false, RelayAddr: relayAddr}
-	clientHost, err := NewHost(context.Background(), clientOpts)
+	clientHost, err := NewHost(ctx, clientOpts)
 	if err != nil {
 		t.Fatalf("failed to create client host: %v", err)
 	}
@@ -122,13 +128,13 @@ func TestP2PRelay(t *testing.T) {
 	maddr, _ := multiaddr.NewMultiaddr(circuitAddrStr)
 	providerInfo, _ := peer.AddrInfoFromP2pAddr(maddr)
 
-	if err := clientHost.Connect(context.Background(), *providerInfo); err != nil {
+	if err := clientHost.Connect(ctx, *providerInfo); err != nil {
 		t.Fatalf("client failed to connect to provider via relay: %v", err)
 	}
 
 	// 3. Test chunk 0 fetch via relay
 	privKey := GetHostPrivateKey(clientHost)
-	plaintext, err := RequestChunk(context.Background(), clientHost, providerHost.ID(), fileID, tree.Root, 0, privKey)
+	plaintext, err := RequestChunk(ctx, clientHost, providerHost.ID(), fileID, tree.Root, 0, privKey)
 	if err != nil {
 		t.Fatalf("RequestChunk via relay failed: %v", err)
 	}
